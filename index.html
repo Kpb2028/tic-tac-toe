@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- frame-ancestors is deliberately absent: it is ignored in a <meta> CSP and
+     must be sent as a real header (see README) if this is ever hosted. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Tic Tac Toe</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="app">
+  <h1>Tic Tac Toe</h1>
+
+  <p class="status" id="status" role="status" aria-live="polite">Loading…</p>
+
+  <div class="board" id="board" role="group" aria-label="Tic tac toe board">
+    <button class="cell" type="button" data-index="0" aria-label="Row 1, column 1, empty"></button>
+    <button class="cell" type="button" data-index="1" aria-label="Row 1, column 2, empty"></button>
+    <button class="cell" type="button" data-index="2" aria-label="Row 1, column 3, empty"></button>
+    <button class="cell" type="button" data-index="3" aria-label="Row 2, column 1, empty"></button>
+    <button class="cell" type="button" data-index="4" aria-label="Row 2, column 2, empty"></button>
+    <button class="cell" type="button" data-index="5" aria-label="Row 2, column 3, empty"></button>
+    <button class="cell" type="button" data-index="6" aria-label="Row 3, column 1, empty"></button>
+    <button class="cell" type="button" data-index="7" aria-label="Row 3, column 2, empty"></button>
+    <button class="cell" type="button" data-index="8" aria-label="Row 3, column 3, empty"></button>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" type="button" id="new-game">New game</button>
+  </div>
+
+  <section class="panel" aria-label="Scoreboard">
+    <div class="scores">
+      <div class="score"><span class="score-label">X</span><span class="score-value" id="score-x">0</span></div>
+      <div class="score"><span class="score-label">Draws</span><span class="score-value" id="score-draw">0</span></div>
+      <div class="score"><span class="score-label">O</span><span class="score-value" id="score-o">0</span></div>
+    </div>
+    <button class="btn btn-quiet" type="button" id="reset-scores">Reset scores</button>
+  </section>
+
+  <section class="panel settings" aria-label="Game settings">
+    <label class="field">
+      <span>Opponent</span>
+      <select id="mode">
+        <option value="cpu">Computer</option>
+        <option value="human">Another player</option>
+      </select>
+    </label>
+
+    <label class="field" id="field-level">
+      <span>Difficulty</span>
+      <select id="level">
+        <option value="easy">Easy</option>
+        <option value="medium">Medium</option>
+        <option value="hard">Unbeatable</option>
+      </select>
+    </label>
+
+    <label class="field" id="field-mark">
+      <span>You play</span>
+      <select id="mark">
+        <option value="X">X (first)</option>
+        <option value="O">O (second)</option>
+      </select>
+    </label>
+  </section>
+
+  <noscript><p class="status">This game needs JavaScript. Serve the folder over HTTP — <code>file://</code> origins are blocked by the page's Content-Security-Policy.</p></noscript>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
