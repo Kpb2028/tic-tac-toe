@@ -16,6 +16,14 @@ python3 -m http.server 8771 --bind 127.0.0.1 --directory /Users/k/projects/014-t
 
 Then open http://127.0.0.1:8771/.
 
+## Deploy (Render)
+
+`render.yaml` declares a static site rooted at the repo, with no build command
+and the security headers a `<meta>` CSP can't carry. Push the repo to GitHub,
+then in the Render dashboard: **New → Blueprint**, pick the repo, apply. Render
+reads `render.yaml`, serves the folder over HTTPS, and redeploys on every push
+to `main`.
+
 ## Play
 
 - Click a square, or Tab to the board and move with the arrow keys, then Enter/Space.
