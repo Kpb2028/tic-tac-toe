@@ -14,67 +14,13 @@
 <main class="app">
   <h1>Tic Tac Toe</h1>
 
-  <p class="status" id="status" role="status" aria-live="polite">Loading…</p>
-
-  <div class="board" id="board" role="group" aria-label="Tic tac toe board">
-    <button class="cell" type="button" data-index="0" aria-label="Row 1, column 1, empty"></button>
-    <button class="cell" type="button" data-index="1" aria-label="Row 1, column 2, empty"></button>
-    <button class="cell" type="button" data-index="2" aria-label="Row 1, column 3, empty"></button>
-    <button class="cell" type="button" data-index="3" aria-label="Row 2, column 1, empty"></button>
-    <button class="cell" type="button" data-index="4" aria-label="Row 2, column 2, empty"></button>
-    <button class="cell" type="button" data-index="5" aria-label="Row 2, column 3, empty"></button>
-    <button class="cell" type="button" data-index="6" aria-label="Row 3, column 1, empty"></button>
-    <button class="cell" type="button" data-index="7" aria-label="Row 3, column 2, empty"></button>
-    <button class="cell" type="button" data-index="8" aria-label="Row 3, column 3, empty"></button>
-  </div>
-
-  <div class="actions">
-    <button class="btn btn-primary" type="button" id="new-game">New game</button>
-  </div>
-
-  <section class="panel" aria-label="Scoreboard">
-    <div class="scores">
-      <div class="score"><span class="score-label">X</span><span class="score-value" id="score-x">0</span></div>
-      <div class="score"><span class="score-label">Draws</span><span class="score-value" id="score-draw">0</span></div>
-      <div class="score"><span class="score-label">O</span><span class="score-value" id="score-o">0</span></div>
-    </div>
-    <button class="btn btn-quiet" type="button" id="reset-scores">Reset scores</button>
-  </section>
-
-  <section class="panel settings" aria-label="Game settings">
-    <label class="field">
-      <span>Opponent</span>
-      <select id="mode">
-        <option value="cpu">Computer</option>
-        <option value="human">Another player</option>
-      </select>
-    </label>
-
-    <label class="field" id="field-level">
-      <span>Difficulty</span>
-      <select id="level">
-        <option value="easy">Easy</option>
-        <option value="medium">Medium</option>
-        <option value="hard">Unbeatable</option>
-      </select>
-    </label>
-
-    <label class="field" id="field-mark">
-      <span>You play</span>
-      <select id="mark">
-        <option value="X">X (first)</option>
-        <option value="O">O (second)</option>
-      </select>
-    </label>
-  </section>
-
   <section class="panel account" aria-labelledby="account-heading">
     <h2 id="account-heading">Account</h2>
 
     <p class="analytics-state" id="account-state" role="status" aria-live="polite">Checking…</p>
 
     <div class="hidden" id="account-signed-out">
-      <p class="muted">Sign in to keep a personal record of your games alongside the global totals. Your email address is stored; nothing else about you is.</p>
+      <p class="muted">Sign in to play. Your email address is stored so your games can be counted as yours; nothing else about you is.</p>
       <div class="account-actions" id="provider-buttons"></div>
     </div>
 
@@ -87,43 +33,101 @@
     </div>
   </section>
 
-  <section class="panel analytics" aria-labelledby="analytics-heading">
-    <h2 id="analytics-heading">Game analytics</h2>
-    <p class="muted">Totals from everyone who plays this page. Results are self-reported by each browser.</p>
+  <!-- Everything below is revealed only once /api/auth/session reports a
+       signed-in visitor. The endpoints enforce the same rule independently. -->
+  <div class="gated hidden" id="gated">
+    <p class="status" id="status" role="status" aria-live="polite">Loading…</p>
 
-    <div class="scope-switch hidden" id="scope-switch" role="group" aria-label="Statistics scope">
-      <button class="btn btn-quiet" type="button" id="scope-global" aria-pressed="true">Everyone</button>
-      <button class="btn btn-quiet" type="button" id="scope-me" aria-pressed="false">Just me</button>
+    <div class="board" id="board" role="group" aria-label="Tic tac toe board">
+      <button class="cell" type="button" data-index="0" aria-label="Row 1, column 1, empty"></button>
+      <button class="cell" type="button" data-index="1" aria-label="Row 1, column 2, empty"></button>
+      <button class="cell" type="button" data-index="2" aria-label="Row 1, column 3, empty"></button>
+      <button class="cell" type="button" data-index="3" aria-label="Row 2, column 1, empty"></button>
+      <button class="cell" type="button" data-index="4" aria-label="Row 2, column 2, empty"></button>
+      <button class="cell" type="button" data-index="5" aria-label="Row 2, column 3, empty"></button>
+      <button class="cell" type="button" data-index="6" aria-label="Row 3, column 1, empty"></button>
+      <button class="cell" type="button" data-index="7" aria-label="Row 3, column 2, empty"></button>
+      <button class="cell" type="button" data-index="8" aria-label="Row 3, column 3, empty"></button>
     </div>
 
-    <p class="analytics-state" id="analytics-state" role="status" aria-live="polite">Loading…</p>
+    <div class="actions">
+      <button class="btn btn-primary" type="button" id="new-game">New game</button>
+    </div>
 
-    <div class="analytics-body hidden" id="analytics-body">
+    <section class="panel" aria-label="Scoreboard">
       <div class="scores">
-        <div class="score"><span class="score-label">Games</span><span class="score-value" id="stat-total">0</span></div>
-        <div class="score"><span class="score-label">Draws</span><span class="score-value" id="stat-draws">0</span></div>
-        <div class="score"><span class="score-label">Avg moves</span><span class="score-value" id="stat-avg">0</span></div>
+        <div class="score"><span class="score-label">X</span><span class="score-value" id="score-x">0</span></div>
+        <div class="score"><span class="score-label">Draws</span><span class="score-value" id="score-draw">0</span></div>
+        <div class="score"><span class="score-label">O</span><span class="score-value" id="score-o">0</span></div>
+      </div>
+      <button class="btn btn-quiet" type="button" id="reset-scores">Reset scores</button>
+    </section>
+
+    <section class="panel settings" aria-label="Game settings">
+      <label class="field">
+        <span>Opponent</span>
+        <select id="mode">
+          <option value="cpu">Computer</option>
+          <option value="human">Another player</option>
+        </select>
+      </label>
+
+      <label class="field" id="field-level">
+        <span>Difficulty</span>
+        <select id="level">
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Unbeatable</option>
+        </select>
+      </label>
+
+      <label class="field" id="field-mark">
+        <span>You play</span>
+        <select id="mark">
+          <option value="X">X (first)</option>
+          <option value="O">O (second)</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="panel analytics" aria-labelledby="analytics-heading">
+      <h2 id="analytics-heading">Game analytics</h2>
+      <p class="muted">Totals from everyone who plays this page. Results are self-reported by each browser.</p>
+
+      <div class="scope-switch hidden" id="scope-switch" role="group" aria-label="Statistics scope">
+        <button class="btn btn-quiet" type="button" id="scope-global" aria-pressed="true">Everyone</button>
+        <button class="btn btn-quiet" type="button" id="scope-me" aria-pressed="false">Just me</button>
       </div>
 
-      <h3>Outcomes</h3>
-      <ul class="bars" id="outcome-bars"></ul>
+      <p class="analytics-state" id="analytics-state" role="status" aria-live="polite">Loading…</p>
 
-      <h3>Versus computer</h3>
-      <table class="grid-table">
-        <caption class="visually-hidden">Win, loss and draw counts for each difficulty level</caption>
-        <thead>
-          <tr><th scope="col">Level</th><th scope="col">You</th><th scope="col">CPU</th><th scope="col">Draw</th></tr>
-        </thead>
-        <tbody id="level-rows"></tbody>
-      </table>
+      <div class="analytics-body hidden" id="analytics-body">
+        <div class="scores">
+          <div class="score"><span class="score-label">Games</span><span class="score-value" id="stat-total">0</span></div>
+          <div class="score"><span class="score-label">Draws</span><span class="score-value" id="stat-draws">0</span></div>
+          <div class="score"><span class="score-label">Avg moves</span><span class="score-value" id="stat-avg">0</span></div>
+        </div>
 
-      <h3>Opening square</h3>
-      <div class="heatmap" id="heatmap" role="group" aria-label="Opening move frequency by board square"></div>
+        <h3>Outcomes</h3>
+        <ul class="bars" id="outcome-bars"></ul>
 
-      <h3>Last 14 days</h3>
-      <ul class="daily" id="daily"></ul>
-    </div>
-  </section>
+        <h3>Versus computer</h3>
+        <table class="grid-table">
+          <caption class="visually-hidden">Win, loss and draw counts for each difficulty level</caption>
+          <thead>
+            <tr><th scope="col">Level</th><th scope="col">You</th><th scope="col">CPU</th><th scope="col">Draw</th></tr>
+          </thead>
+          <tbody id="level-rows"></tbody>
+        </table>
+
+        <h3>Opening square</h3>
+        <div class="heatmap" id="heatmap" role="group" aria-label="Opening move frequency by board square"></div>
+
+        <h3>Last 14 days</h3>
+        <ul class="daily" id="daily"></ul>
+      </div>
+    </section>
+  </div>
 
   <noscript><p class="status">This game needs JavaScript. Serve the folder over HTTP — <code>file://</code> origins are blocked by the page's Content-Security-Policy.</p></noscript>
 </main>

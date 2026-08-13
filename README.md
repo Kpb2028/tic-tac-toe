@@ -4,9 +4,14 @@ A browser game (`index.html`, `styles.css`, `app.js`) plus two Python serverless
 functions in `api/` that record finished games to Supabase Postgres and serve
 global aggregate statistics.
 
-The game itself still runs entirely client-side and needs no backend. If the API
-is missing or the database is unprovisioned, the analytics panel says so and the
-game plays exactly as before.
+**Sign-in is required to play.** The page shows only the account panel until
+`/api/auth/session` reports a signed-in visitor, and `/api/games` and
+`/api/stats` both return 401 without a session.
+
+That gate is a convention, not a boundary. The board and the minimax opponent
+live in `app.js`, which any browser can fetch and run, so someone determined can
+play the static files offline. What is genuinely enforced is the data: no game
+is recorded and no statistics are served without a session.
 
 ## Layout
 
@@ -84,13 +89,15 @@ python3 -m http.server 8771 --bind 127.0.0.1 --directory .
 
 `POST /api/games` takes `{ mode, level, playerMark, outcome, moves, firstMove }`.
 `level` and `playerMark` are required for `mode: "cpu"` and rejected otherwise.
-A game played while signed in is linked to the account; anonymous play still
-records, just unowned.
+Both `/api/games` and `/api/stats` require a session and answer 401 without one;
+every recorded game therefore has an owner. Rows recorded before sign-in was
+introduced keep a null `user_id` and still count toward the global totals.
 
 ## Sign-in
 
-Optional. With no provider credentials set, the account panel says so and
-everything else works exactly as before.
+Required, and therefore a single point of failure: with no provider credentials
+set, or with a misconfigured one, nobody can use the app at all. Configuring at
+least one provider is part of deploying this, not an optional extra.
 
 ### Register the OAuth apps
 

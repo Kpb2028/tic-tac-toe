@@ -54,6 +54,7 @@
     scopeSwitch: document.getElementById('scope-switch'),
     scopeGlobal: document.getElementById('scope-global'),
     scopeMe: document.getElementById('scope-me'),
+    gated: document.getElementById('gated'),
   };
 
   const cells = Array.from(document.querySelectorAll('.cell'));
@@ -584,6 +585,11 @@
     el.accountSignedOut.classList.toggle('hidden', signedIn || !canSignIn);
     el.scopeSwitch.classList.toggle('hidden', !signedIn);
 
+    // The game and its statistics are for signed-in visitors only. This hides
+    // them; /api/games and /api/stats refuse anonymous callers independently,
+    // which is where the rule is actually enforced.
+    el.gated.classList.toggle('hidden', !signedIn);
+
     if (signedIn) {
       el.accountEmail.textContent = data.email || '';
       el.accountState.classList.add('hidden');
@@ -612,7 +618,10 @@
       .catch(() => {
         accountMessage('Accounts are unavailable on this host.');
       })
-      .finally(loadStats);
+      .finally(() => {
+        // Asking for stats while signed out would only earn a 401.
+        if (signedIn) loadStats();
+      });
   }
 
   function reportSignInOutcome() {

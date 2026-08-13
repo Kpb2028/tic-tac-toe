@@ -163,6 +163,16 @@ select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 .hidden { display: none; }
 
+/* The gated region is a flex column in its own right, so hiding it needs a
+   rule more specific than the plain .hidden above. */
+.gated {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.gated.hidden { display: none; }
+
 .visually-hidden {
   position: absolute;
   width: 1px;

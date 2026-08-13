@@ -66,6 +66,13 @@ class handler(BaseHTTPRequestHandler):
 
         try:
             with connect() as conn, conn.cursor() as cur:
+                # Sign-in is required to play, so an unowned game is not a
+                # thing that can legitimately happen.
+                user = current_user(cur, self)
+                if user is None:
+                    send_json(self, 401, {"error": "Sign in to record games"})
+                    return
+
                 cur.execute(RATE_LIMIT_SQL, (self._bucket(),))
 
                 if cur.fetchone()["hits"] > HOURLY_LIMIT:
@@ -77,9 +84,6 @@ class handler(BaseHTTPRequestHandler):
                     )
                     return
 
-                # Anonymous play still records, just without an owner.
-                user = current_user(cur, self)
-
                 cur.execute(
                     INSERT_SQL,
                     (
@@ -89,11 +93,11 @@ class handler(BaseHTTPRequestHandler):
                         game["outcome"],
                         game["moves"],
                         game["first_move"],
-                        user["id"] if user else None,
+                        user["id"],
                     ),
                 )
 
-            send_json(self, 201, {"recorded": True, "linked": user is not None})
+            send_json(self, 201, {"recorded": True, "linked": True})
 
         except MissingDatabaseUrl:
             send_json(self, 503, {"error": "Analytics storage is not configured"})

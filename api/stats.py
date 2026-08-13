@@ -111,14 +111,14 @@ class handler(BaseHTTPRequestHandler):
 
         try:
             with connect() as conn, conn.cursor() as cur:
-                user_id = None
+                # Statistics are behind sign-in too, in both scopes: the global
+                # figures are only shown inside the gated part of the page.
+                user = current_user(cur, self)
+                if user is None:
+                    send_json(self, 401, {"error": "Not signed in"})
+                    return
 
-                if wants_personal:
-                    user = current_user(cur, self)
-                    if user is None:
-                        send_json(self, 401, {"error": "Not signed in"})
-                        return
-                    user_id = str(user["id"])
+                user_id = str(user["id"]) if wants_personal else None
 
                 cur.execute(STATS_SQL, {"user_id": user_id, "days": WINDOW_DAYS - 1})
                 payload = cur.fetchone()["payload"]
