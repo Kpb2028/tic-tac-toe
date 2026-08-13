@@ -55,8 +55,10 @@ STATS_SQL = """
       SELECT json_agg(json_build_object('day', day, 'count', n) ORDER BY day) AS rows
       FROM (
         SELECT d::date AS day, count(g.id)::int AS n
-        -- Bind parameters arrive untyped, and "date - %s" matches no operator,
-        -- so the offset and both bounds are cast explicitly.
+        -- Bind parameters arrive untyped and subtracting one from a date
+        -- matches no operator, so the offset and both bounds are cast
+        -- explicitly. Note psycopg counts placeholders lexically, comments
+        -- included, so this text must not contain one.
         FROM generate_series(
           ((now() AT TIME ZONE 'UTC')::date - (%s)::int)::timestamp,
           ((now() AT TIME ZONE 'UTC')::date)::timestamp,
