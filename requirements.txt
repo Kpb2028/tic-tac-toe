@@ -1,0 +1,4 @@
+# Pinned exactly: an unpinned range would let a future release change what
+# ships without a code change here. The [binary] extra ships prebuilt wheels,
+# so no libpq or compiler is needed at build time.
+psycopg[binary]==3.2.13
