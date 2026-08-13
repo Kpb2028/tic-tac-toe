@@ -76,19 +76,96 @@ python3 -m http.server 8771 --bind 127.0.0.1 --directory .
 | Route | Method | Purpose |
 |---|---|---|
 | `/api/games` | POST | Record one finished game |
-| `/api/stats` | GET | Global aggregates for the panel |
+| `/api/stats` | GET | Aggregates; `?scope=me` for the signed-in account |
+| `/api/auth/login` | GET | Start sign-in: `?provider=google\|microsoft` |
+| `/api/auth/callback` | GET | Provider redirect target; issues the session |
+| `/api/auth/session` | GET, DELETE | Who is signed in / sign out |
+| `/api/auth/account` | DELETE | Erase the account |
 
 `POST /api/games` takes `{ mode, level, playerMark, outcome, moves, firstMove }`.
 `level` and `playerMark` are required for `mode: "cpu"` and rejected otherwise.
+A game played while signed in is linked to the account; anonymous play still
+records, just unowned.
+
+## Sign-in
+
+Optional. With no provider credentials set, the account panel says so and
+everything else works exactly as before.
+
+### Register the OAuth apps
+
+Both need the same redirect URI — your deployment's origin plus
+`/api/auth/callback`, e.g. `https://014-tic-tac-toe.vercel.app/api/auth/callback`.
+
+**Google** — Cloud Console → APIs & Services → Credentials → Create credentials →
+OAuth client ID → Web application. Add the redirect URI, then copy the client ID
+and secret.
+
+**Microsoft** — Entra ID → App registrations → New registration. For supported
+account types pick *any organizational directory and personal Microsoft
+accounts*, which is what the default `common` tenant expects; anything narrower
+needs `MICROSOFT_TENANT` set to match. Add a **Web** redirect URI, then create a
+secret under Certificates & secrets — copy its *value*, not its ID.
+
+### Environment variables
+
+```sh
+vercel env add GOOGLE_CLIENT_ID production
+vercel env add GOOGLE_CLIENT_SECRET production
+vercel env add MICROSOFT_CLIENT_ID production
+vercel env add MICROSOFT_CLIENT_SECRET production
+vercel env add APP_BASE_URL production      # https://014-tic-tac-toe.vercel.app
+```
+
+`MICROSOFT_TENANT` is optional and defaults to `common`. Providers appear in the
+UI only when both their id and secret are present, so Google alone works fine.
+
+`APP_BASE_URL` pins the redirect URI. Without it the value is derived from the
+`Host` header, which an attacker can influence — it is only ever used to build
+our own redirect URI, which the provider then checks against its registered
+allow-list, but pinning it removes the question.
+
+### How the session works
+
+Sign-in is the authorization-code flow with PKCE, state, and nonce. The code is
+exchanged server-side; provider tokens are never stored and never reach the
+browser. What the browser gets is an opaque random token in a cookie marked
+`HttpOnly`, `Secure`, `SameSite=Lax`, and only its SHA-256 is stored, so a
+database disclosure yields no usable sessions.
+
+The ID token's signature is not verified. That is sound only because the token
+is read from the response of a direct, TLS-authenticated call to the provider's
+own token endpoint — the one case OpenID Connect Core 3.1.3.7 allows it. Its
+`aud`, `iss`, `exp`, and `nonce` are all checked. Never extend this to a token
+that arrived any other way.
+
+Accounts are keyed on the provider's immutable subject, not the email. Signing
+in with Google and then Microsoft on the same *verified* address joins one
+account rather than creating two.
+
+### Deleting an account
+
+The Delete account button erases the user row; identities and sessions cascade.
+Games are kept but unlinked — `games.user_id` is `ON DELETE SET NULL` — so the
+global totals stay consistent while nothing ties a row to a person.
 
 ### Schema
 
 `games` holds one row per finished game — mode, level, player mark, outcome,
-move count, opening square, timestamp. `rate_limit` holds one row per caller
-bucket. Neither table stores an IP address, a user agent, a cookie, or any other
-identifier: there is nothing in the database that links a row to a person.
+move count, opening square, timestamp, and a nullable `user_id`. `rate_limit`
+holds one row per caller bucket.
 
-Both tables have row-level security enabled with no policies. Nothing here is
+Accounts add `users` (email, display name), `identities` (provider plus the
+provider's subject), `sessions` (the SHA-256 of a cookie token), and `auth_flow`
+(a sign-in in progress, deleted on use).
+
+**On personal data:** before sign-in existed, nothing in this database linked a
+row to a person. That is no longer true — `users.email` identifies someone, and
+a linked game says what they played. Still absent: IP addresses, user agents,
+tracking cookies, and any third-party analytics. Anonymous play remains fully
+anonymous, and account deletion is a real feature rather than a support request.
+
+Every table has row-level security enabled with no policies. Nothing here is
 reached through PostgREST — the API connects as the database owner — so if
 Supabase's `anon` or `authenticated` roles are ever pointed at this project they
 read and write nothing rather than everything.

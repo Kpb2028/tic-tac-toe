@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import psycopg  # noqa: E402
 
+from _auth import current_user  # noqa: E402
 from _db import MissingDatabaseUrl, connect, is_missing_schema  # noqa: E402
 from _game import parse_game  # noqa: E402
 from _http import client_ip, origin_allowed, read_json_body, send_json  # noqa: E402
@@ -41,8 +42,8 @@ RATE_LIMIT_SQL = """
 """
 
 INSERT_SQL = """
-    INSERT INTO games (mode, level, player_mark, outcome, moves, first_move)
-    VALUES (%s, %s, %s, %s, %s, %s)
+    INSERT INTO games (mode, level, player_mark, outcome, moves, first_move, user_id)
+    VALUES (%s, %s, %s, %s, %s, %s, %s)
 """
 
 
@@ -76,6 +77,9 @@ class handler(BaseHTTPRequestHandler):
                     )
                     return
 
+                # Anonymous play still records, just without an owner.
+                user = current_user(cur, self)
+
                 cur.execute(
                     INSERT_SQL,
                     (
@@ -85,10 +89,11 @@ class handler(BaseHTTPRequestHandler):
                         game["outcome"],
                         game["moves"],
                         game["first_move"],
+                        user["id"] if user else None,
                     ),
                 )
 
-            send_json(self, 201, {"recorded": True})
+            send_json(self, 201, {"recorded": True, "linked": user is not None})
 
         except MissingDatabaseUrl:
             send_json(self, 503, {"error": "Analytics storage is not configured"})

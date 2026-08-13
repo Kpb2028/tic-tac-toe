@@ -62,12 +62,68 @@ STATEMENTS = (
       hits         integer     NOT NULL DEFAULT 0
     )
     """,
-    # Both tables are reached only through the connection string used by the
-    # API. Enabling RLS with no policy means that if Supabase's anon or
-    # authenticated PostgREST roles are ever pointed at this project, they read
-    # and write nothing rather than everything.
+    # --- accounts --------------------------------------------------------
+    """
+    CREATE TABLE IF NOT EXISTS users (
+      id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+      email        text        NOT NULL UNIQUE,
+      display_name text,
+      created_at   timestamptz NOT NULL DEFAULT now(),
+      last_seen_at timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    # One row per provider account. Keyed on the provider's immutable subject
+    # rather than the email, which can change.
+    """
+    CREATE TABLE IF NOT EXISTS identities (
+      provider   text        NOT NULL CHECK (provider IN ('google', 'microsoft')),
+      subject    text        NOT NULL,
+      user_id    uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (provider, subject)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS identities_user_idx ON identities (user_id)",
+    # id holds the SHA-256 of the cookie token, never the token itself, so a
+    # dump of this table cannot be replayed as a session.
+    """
+    CREATE TABLE IF NOT EXISTS sessions (
+      id         text        PRIMARY KEY,
+      user_id    uuid        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      expires_at timestamptz NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS sessions_expires_idx ON sessions (expires_at)",
+    # A sign-in in progress: state, nonce and PKCE verifier. Rows are deleted on
+    # use and expire after ten minutes.
+    """
+    CREATE TABLE IF NOT EXISTS auth_flow (
+      state         text        PRIMARY KEY,
+      nonce         text        NOT NULL,
+      code_verifier text        NOT NULL,
+      provider      text        NOT NULL CHECK (provider IN ('google', 'microsoft')),
+      created_at    timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS auth_flow_created_idx ON auth_flow (created_at)",
+    # Nulled rather than deleted when an account goes away, so global totals
+    # stay consistent while nothing links a game to a person.
+    """
+    ALTER TABLE games
+      ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES users (id) ON DELETE SET NULL
+    """,
+    "CREATE INDEX IF NOT EXISTS games_user_idx ON games (user_id) WHERE user_id IS NOT NULL",
+    # Every table is reached only through the connection string used by the API.
+    # Enabling RLS with no policy means that if Supabase's anon or authenticated
+    # PostgREST roles are ever pointed at this project, they read and write
+    # nothing rather than everything.
     "ALTER TABLE games ENABLE ROW LEVEL SECURITY",
     "ALTER TABLE rate_limit ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE users ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE identities ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE sessions ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE auth_flow ENABLE ROW LEVEL SECURITY",
 )
 
 
@@ -86,7 +142,10 @@ def main():
         for statement in STATEMENTS:
             cur.execute(statement)
 
-    print("Schema ready: games, rate_limit (RLS enabled, no policies)")
+    print(
+        "Schema ready: games, rate_limit, users, identities, sessions, auth_flow "
+        "(RLS enabled, no policies)"
+    )
     return 0
 
 

@@ -68,9 +68,33 @@
     </label>
   </section>
 
+  <section class="panel account" aria-labelledby="account-heading">
+    <h2 id="account-heading">Account</h2>
+
+    <p class="analytics-state" id="account-state" role="status" aria-live="polite">Checking…</p>
+
+    <div class="hidden" id="account-signed-out">
+      <p class="muted">Sign in to keep a personal record of your games alongside the global totals. Your email address is stored; nothing else about you is.</p>
+      <div class="account-actions" id="provider-buttons"></div>
+    </div>
+
+    <div class="hidden" id="account-signed-in">
+      <p class="account-identity">Signed in as <strong id="account-email"></strong></p>
+      <div class="account-actions">
+        <button class="btn btn-quiet" type="button" id="sign-out">Sign out</button>
+        <button class="btn btn-danger" type="button" id="delete-account">Delete account</button>
+      </div>
+    </div>
+  </section>
+
   <section class="panel analytics" aria-labelledby="analytics-heading">
     <h2 id="analytics-heading">Game analytics</h2>
-    <p class="muted">Anonymous totals from everyone who plays this page. Results are self-reported by each browser.</p>
+    <p class="muted">Totals from everyone who plays this page. Results are self-reported by each browser.</p>
+
+    <div class="scope-switch hidden" id="scope-switch" role="group" aria-label="Statistics scope">
+      <button class="btn btn-quiet" type="button" id="scope-global" aria-pressed="true">Everyone</button>
+      <button class="btn btn-quiet" type="button" id="scope-me" aria-pressed="false">Just me</button>
+    </div>
 
     <p class="analytics-state" id="analytics-state" role="status" aria-live="polite">Loading…</p>
 

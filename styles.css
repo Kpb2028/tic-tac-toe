@@ -178,9 +178,35 @@ select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   color: var(--muted);
 }
 
-.analytics h2 {
+.analytics h2,
+.account h2 {
   margin: 0;
   font-size: 20px;
+}
+
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.account-identity { margin: 0; }
+
+.btn-danger {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.scope-switch {
+  display: flex;
+  gap: 6px;
+}
+
+.scope-switch .btn { padding: 5px 14px; font-size: 14px; }
+
+.scope-switch .btn[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--bg);
 }
 
 .analytics h3 {

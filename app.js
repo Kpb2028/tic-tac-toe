@@ -44,6 +44,16 @@
     levelRows: document.getElementById('level-rows'),
     heatmap: document.getElementById('heatmap'),
     daily: document.getElementById('daily'),
+    accountState: document.getElementById('account-state'),
+    accountSignedOut: document.getElementById('account-signed-out'),
+    accountSignedIn: document.getElementById('account-signed-in'),
+    accountEmail: document.getElementById('account-email'),
+    providerButtons: document.getElementById('provider-buttons'),
+    signOut: document.getElementById('sign-out'),
+    deleteAccount: document.getElementById('delete-account'),
+    scopeSwitch: document.getElementById('scope-switch'),
+    scopeGlobal: document.getElementById('scope-global'),
+    scopeMe: document.getElementById('scope-me'),
   };
 
   const cells = Array.from(document.querySelectorAll('.cell'));
@@ -308,6 +318,8 @@
   ];
 
   let statsPending = false;
+  let statsScope = 'global';
+  let signedIn = false;
 
   function analyticsMessage(text, isError) {
     el.analyticsState.textContent = text;
@@ -345,10 +357,18 @@
     if (statsPending) return;
     statsPending = true;
 
-    fetch('/api/stats', { headers: { Accept: 'application/json' } })
+    const url = statsScope === 'me' ? '/api/stats?scope=me' : '/api/stats';
+
+    fetch(url, { headers: { Accept: 'application/json' } })
       .then((res) => {
         if (res.status === 503) {
           analyticsMessage('Analytics storage is not configured yet.');
+          return null;
+        }
+        if (res.status === 401) {
+          // The session expired between rendering the switch and asking.
+          setScope('global');
+          loadSession();
           return null;
         }
         if (!res.ok) {
@@ -386,7 +406,11 @@
     renderDaily(Array.isArray(data.daily) ? data.daily : []);
 
     if (!total) {
-      analyticsMessage('No games recorded yet — finish one to start the tally.');
+      analyticsMessage(
+        statsScope === 'me'
+          ? 'You have no recorded games yet — finish one while signed in.'
+          : 'No games recorded yet — finish one to start the tally.',
+      );
       return;
     }
 
@@ -507,6 +531,137 @@
     );
   }
 
+  // --- account -----------------------------------------------------------
+  // The session lives in an HttpOnly cookie, so this code cannot read it and
+  // never sees a token. Signed-in state is whatever /api/auth/session reports.
+
+  const PROVIDER_LABELS = { google: 'Google', microsoft: 'Microsoft' };
+
+  // Fixed strings only — the callback redirects with a code, never with text
+  // from the provider, so nothing user-controlled reaches the page.
+  const SIGNIN_MESSAGES = {
+    ok: 'Signed in.',
+    failed: 'Sign-in did not complete. Please try again.',
+    cancelled: 'Sign-in was cancelled.',
+    unavailable: 'Sign-in is not available right now.',
+  };
+
+  function accountMessage(text, isError) {
+    el.accountState.textContent = text;
+    el.accountState.classList.toggle('error', Boolean(isError));
+    el.accountState.classList.remove('hidden');
+  }
+
+  function setScope(scope) {
+    statsScope = scope;
+    el.scopeGlobal.setAttribute('aria-pressed', String(scope === 'global'));
+    el.scopeMe.setAttribute('aria-pressed', String(scope === 'me'));
+  }
+
+  function renderProviders(providers) {
+    el.providerButtons.replaceChildren(
+      ...providers.map((entry) => {
+        // A link, not a form: form-action 'none' in the CSP blocks submissions.
+        const link = document.createElement('a');
+        link.className = 'btn';
+        link.href = `/api/auth/login?provider=${encodeURIComponent(entry.provider)}`;
+        link.textContent = `Continue with ${PROVIDER_LABELS[entry.provider] || entry.label}`;
+        link.rel = 'nofollow';
+        return link;
+      }),
+    );
+  }
+
+  function renderAccount(data) {
+    const providers = Array.isArray(data.providers) ? data.providers : [];
+    signedIn = Boolean(data.signedIn);
+
+    el.accountSignedIn.classList.toggle('hidden', !signedIn);
+    el.accountSignedOut.classList.toggle('hidden', signedIn);
+    el.scopeSwitch.classList.toggle('hidden', !signedIn);
+
+    if (signedIn) {
+      el.accountEmail.textContent = data.email || '';
+      el.accountState.classList.add('hidden');
+      return;
+    }
+
+    setScope('global');
+    renderProviders(providers);
+
+    if (data.unavailable) {
+      accountMessage('Sign-in storage is not configured yet.');
+    } else if (!providers.length) {
+      accountMessage('No sign-in provider is configured on this deployment.');
+    } else {
+      el.accountState.classList.add('hidden');
+    }
+  }
+
+  function loadSession() {
+    return fetch('/api/auth/session', { headers: { Accept: 'application/json' } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) renderAccount(data);
+        else accountMessage('Accounts are unavailable on this host.');
+      })
+      .catch(() => {
+        accountMessage('Accounts are unavailable on this host.');
+      })
+      .finally(loadStats);
+  }
+
+  function reportSignInOutcome() {
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get('signin');
+    if (!outcome) return;
+
+    // Strip the marker so a reload doesn't repeat the message.
+    params.delete('signin');
+    const query = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : ''));
+
+    if (SIGNIN_MESSAGES[outcome]) accountMessage(SIGNIN_MESSAGES[outcome], outcome !== 'ok');
+  }
+
+  el.signOut.addEventListener('click', () => {
+    fetch('/api/auth/session', { method: 'DELETE' })
+      .then(() => {
+        setScope('global');
+        return loadSession();
+      })
+      .catch(() => accountMessage('Could not sign out.', true));
+  });
+
+  el.deleteAccount.addEventListener('click', () => {
+    const confirmed = window.confirm(
+      'Delete your account? Your email address and sign-in details are erased. ' +
+        'Games you played stay in the global totals but stop being linked to you. ' +
+        'This cannot be undone.',
+    );
+    if (!confirmed) return;
+
+    fetch('/api/auth/account', { method: 'DELETE' })
+      .then((res) => {
+        if (!res.ok) throw new Error('delete failed');
+        setScope('global');
+        return loadSession().then(() => accountMessage('Your account was deleted.'));
+      })
+      .catch(() => accountMessage('Could not delete the account.', true));
+  });
+
+  el.scopeGlobal.addEventListener('click', () => {
+    if (statsScope === 'global') return;
+    setScope('global');
+    loadStats();
+  });
+
+  el.scopeMe.addEventListener('click', () => {
+    if (statsScope === 'me' || !signedIn) return;
+    setScope('me');
+    loadStats();
+  });
+
   // --- input -------------------------------------------------------------
 
   el.board.addEventListener('click', (event) => {
@@ -564,5 +719,6 @@
   });
 
   newGame();
-  loadStats();
+  reportSignInOutcome();
+  loadSession(); // loads stats once the signed-in state is known
 })();
