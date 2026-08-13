@@ -16,6 +16,13 @@ DEFAULT_AMOUNT_MINOR = 500  # 5.00 in the configured currency
 DEFAULT_CURRENCY = "usd"
 PRODUCT_NAME = "Tic Tac Toe supporter"
 
+# Stripe's Managed Payments (on by default) makes Stripe the merchant of record
+# and handles VAT, but every inline price must declare what is being sold.
+# txcd_10000000 is "General - Electronically Supplied Services", the closest fit
+# for a digital supporter payment. Which code applies is a tax question, not a
+# code one — override with STRIPE_TAX_CODE if your accountant says otherwise.
+DEFAULT_TAX_CODE = "txcd_10000000"
+
 
 class StripeNotConfigured(RuntimeError):
     """No secret key in the environment."""
@@ -59,6 +66,10 @@ def amount_minor():
 
 def currency():
     return (os.environ.get("STRIPE_CURRENCY") or DEFAULT_CURRENCY).lower()
+
+
+def tax_code():
+    return os.environ.get("STRIPE_TAX_CODE") or DEFAULT_TAX_CODE
 
 
 def is_supporter(cur, user_id):

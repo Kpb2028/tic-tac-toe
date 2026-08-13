@@ -5,6 +5,7 @@ Returns the URL of a Stripe-hosted Checkout page for the browser to navigate to.
 
 import os
 import sys
+import time
 from http.server import BaseHTTPRequestHandler
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,6 +22,7 @@ from _pay import (  # noqa: E402
     amount_minor,
     client,
     currency,
+    tax_code,
 )
 
 
@@ -64,12 +66,22 @@ class handler(BaseHTTPRequestHandler):
                         "price_data": {
                             "currency": currency(),
                             "unit_amount": amount_minor(),
-                            "product_data": {"name": PRODUCT_NAME},
+                            # tax_code is mandatory while Managed Payments is
+                            # enabled: Stripe acts as merchant of record and
+                            # must know what is being sold to charge VAT.
+                            "product_data": {
+                                "name": PRODUCT_NAME,
+                                "tax_code": tax_code(),
+                            },
                         },
                     }
                 ],
-                # Guards against a double-click opening two sessions.
-                idempotency_key=f"checkout:{user_id}:{amount_minor()}:{currency()}",
+                # Collapses a double-click into one session. Bucketed by the
+                # minute rather than fixed: Stripe caches a key for 24 hours and
+                # rejects reuse when the parameters change, so a constant key
+                # would block every legitimate retry for the rest of the day
+                # after any change to the line item.
+                idempotency_key=f"checkout:{user_id}:{int(time.time() // 60)}",
             )
 
             send_json(self, 200, {"url": session.url})
