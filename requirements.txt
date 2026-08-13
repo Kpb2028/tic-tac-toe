@@ -2,3 +2,8 @@
 # ships without a code change here. The [binary] extra ships prebuilt wheels,
 # so no libpq or compiler is needed at build time.
 psycopg[binary]==3.2.13
+
+# Official SDK rather than hand-rolled HTTP. Webhook signature verification is
+# security-critical — timestamp tolerance, the v1 scheme, constant-time compare
+# — and is not worth reimplementing.
+stripe==15.5.0

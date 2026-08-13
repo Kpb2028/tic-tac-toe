@@ -55,6 +55,9 @@
     scopeGlobal: document.getElementById('scope-global'),
     scopeMe: document.getElementById('scope-me'),
     gated: document.getElementById('gated'),
+    support: document.getElementById('support'),
+    supportState: document.getElementById('support-state'),
+    supporterBadge: document.getElementById('supporter-badge'),
   };
 
   const cells = Array.from(document.querySelectorAll('.cell'));
@@ -592,9 +595,15 @@
 
     if (signedIn) {
       el.accountEmail.textContent = data.email || '';
+      el.supporterBadge.classList.toggle('hidden', !data.supporter);
+      // Offer to pay only when Stripe is configured and they have not already.
+      el.support.classList.toggle('hidden', !data.paymentsEnabled || Boolean(data.supporter));
       el.accountState.classList.add('hidden');
       return;
     }
+
+    el.supporterBadge.classList.add('hidden');
+    el.support.classList.add('hidden');
 
     setScope('global');
     renderProviders(providers);
@@ -661,6 +670,52 @@
         return loadSession().then(() => accountMessage('Your account was deleted.'));
       })
       .catch(() => accountMessage('Could not delete the account.', true));
+  });
+
+  // Fixed strings again — nothing from Stripe reaches the page as text.
+  const SUPPORT_MESSAGES = {
+    thanks: 'Thank you. Your supporter badge appears once Stripe confirms the payment.',
+    cancelled: 'Checkout was cancelled. Nothing was charged.',
+  };
+
+  function supportMessage(text) {
+    el.supportState.textContent = text;
+    el.supportState.classList.remove('hidden');
+  }
+
+  function reportSupportOutcome() {
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get('support');
+    if (!outcome) return;
+
+    params.delete('support');
+    const query = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : ''));
+
+    if (SUPPORT_MESSAGES[outcome]) supportMessage(SUPPORT_MESSAGES[outcome]);
+
+    // The webhook may land after the redirect, so re-check shortly for the badge.
+    if (outcome === 'thanks') window.setTimeout(loadSession, 2500);
+  }
+
+  el.support.addEventListener('click', () => {
+    el.support.disabled = true;
+    supportMessage('Opening Stripe…');
+
+    fetch('/api/pay/checkout', { method: 'POST', headers: { Accept: 'application/json' } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data.url === 'string' && data.url.startsWith('https://')) {
+          window.location.assign(data.url);
+          return;
+        }
+        el.support.disabled = false;
+        supportMessage('Could not open checkout. Please try again.');
+      })
+      .catch(() => {
+        el.support.disabled = false;
+        supportMessage('Could not open checkout. Please try again.');
+      });
   });
 
   el.scopeGlobal.addEventListener('click', () => {
@@ -734,5 +789,8 @@
   newGame();
   // After loadSession, not before: renderAccount clears the status line, which
   // would wipe the outcome message from a sign-in that had just failed.
-  loadSession().then(reportSignInOutcome); // loadSession also loads the stats
+  loadSession().then(() => {
+    reportSignInOutcome();
+    reportSupportOutcome();
+  }); // loadSession also loads the stats
 })();

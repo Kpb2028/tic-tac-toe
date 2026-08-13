@@ -18,10 +18,13 @@ is recorded and no statistics are served without a session.
 ```
 index.html  styles.css  app.js     the game, no build step
 api/games.py                       POST — record one finished game
-api/stats.py                       GET  — global aggregates
-api/_db.py  _game.py  _http.py     shared helpers (underscore = not routed)
+api/stats.py                       GET  — aggregates, global or personal
+api/auth/*.py                      sign-in, session, account deletion
+api/pay/*.py                       Stripe checkout and webhook
+api/_db.py _game.py _http.py       shared helpers (underscore = not routed)
+api/_auth.py _pay.py               OIDC and Stripe helpers
 scripts/init_db.py                 idempotent schema setup
-requirements.txt                   pinned psycopg
+requirements.txt                   pinned psycopg and stripe
 ```
 
 ## Run
@@ -86,6 +89,8 @@ python3 -m http.server 8771 --bind 127.0.0.1 --directory .
 | `/api/auth/callback` | GET | Provider redirect target; issues the session |
 | `/api/auth/session` | GET, DELETE | Who is signed in / sign out |
 | `/api/auth/account` | DELETE | Erase the account |
+| `/api/pay/checkout` | POST | Start a supporter payment; returns a Stripe URL |
+| `/api/pay/webhook` | POST | Stripe callback; the only grant of supporter status |
 
 `POST /api/games` takes `{ mode, level, playerMark, outcome, moves, firstMove }`.
 `level` and `playerMark` are required for `mode: "cpu"` and rejected otherwise.
@@ -150,13 +155,77 @@ Accounts are keyed on the provider's immutable subject, not the email. Signing
 in with Google and then Microsoft on the same *verified* address joins one
 account rather than creating two.
 
-### Deleting an account
+## Payments
+
+Optional, and independent of everything else: with no Stripe key set, the
+Support button never appears and the rest of the app is unaffected.
+
+A single one-off "supporter" payment. Paying earns a badge and nothing more —
+no feature is withheld behind it.
+
+### Setup
+
+1. In the Stripe dashboard, stay in **test mode** and copy the secret key from
+   Developers → API keys. It begins `sk_test_`.
+2. Add a webhook endpoint at Developers → Webhooks pointing to
+   `https://014-tic-tac-toe.vercel.app/api/pay/webhook`, subscribed to
+   `checkout.session.completed`. Copy its signing secret, which begins `whsec_`.
+3. Set the variables:
+
+   ```sh
+   vercel env add STRIPE_SECRET_KEY production
+   vercel env add STRIPE_WEBHOOK_SECRET production
+   vercel env add STRIPE_SUPPORT_AMOUNT production   # optional, minor units, default 500
+   vercel env add STRIPE_CURRENCY production         # optional, default usd
+   ```
+
+4. Redeploy, then pay with test card `4242 4242 4242 4242`, any future expiry
+   and any CVC.
+
+Going live means swapping both secrets for their live equivalents — the webhook
+signing secret differs between test and live mode, and using the wrong one
+rejects every event.
+
+### How it works, and why
+
+**Hosted Checkout only.** The browser is redirected to Stripe's own page, so no
+card details ever touch this app, PCI scope stays at SAQ A, and the CSP needs no
+Stripe origins. Embedding Stripe Elements would have required opening
+`script-src`, `frame-src` and `connect-src`.
+
+**The webhook is the only thing that grants supporter status.** The redirect back
+to `/?support=thanks` is cosmetic — anyone can type that URL. Entitlement is
+written only when a signature-verified `checkout.session.completed` arrives with
+`payment_status: "paid"`.
+
+**The amount never comes from the request.** It is read from the environment
+server-side. A client-supplied price is the classic payments hole: the buyer
+chooses what to pay.
+
+**Replays are safe.** Stripe retries on any non-2xx and can deliver an event more
+than once, so the insert is idempotent on the Checkout session id. Unrelated
+event types are acknowledged with 200 rather than rejected, which would put
+Stripe into a retry loop. A database failure does return 5xx, deliberately, so
+Stripe retries rather than the payment being silently dropped.
+
+**Stripe objects are read by subscript, never `.get()`.** `stripe.StripeObject`
+routes attribute access to its own field map, so `.get(...)` raises
+`AttributeError` instead of behaving like the dict method. `api/pay/webhook.py`
+has a `field()` helper for this; using `.get` there is a bug that only shows up
+against a real event.
+
+## Deleting an account
 
 The Delete account button erases the user row; identities and sessions cascade.
 Games are kept but unlinked — `games.user_id` is `ON DELETE SET NULL` — so the
 global totals stay consistent while nothing ties a row to a person.
 
-### Schema
+A payment outlives the account that made it for the same reason and by the same
+mechanism: `payments.user_id` is also `ON DELETE SET NULL`, leaving the financial
+record intact but unlinked. That matters for refunds and accounting, and what
+remains holds no personal data — just Stripe's ids, an amount, and a currency.
+
+## Schema
 
 `games` holds one row per finished game — mode, level, player mark, outcome,
 move count, opening square, timestamp, and a nullable `user_id`. `rate_limit`
@@ -165,6 +234,11 @@ holds one row per caller bucket.
 Accounts add `users` (email, display name), `identities` (provider plus the
 provider's subject), `sessions` (the SHA-256 of a cookie token), and `auth_flow`
 (a sign-in in progress, deleted on use).
+
+`payments` holds one row per completed Checkout session, keyed on Stripe's
+session id — which is what makes the webhook idempotent. It stores Stripe's ids,
+the amount in minor units, the currency and a status. No card data is stored,
+because none of it ever reaches this app.
 
 **On personal data:** before sign-in existed, nothing in this database linked a
 row to a person. That is no longer true — `users.email` identifies someone, and

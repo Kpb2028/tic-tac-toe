@@ -25,11 +25,13 @@
     </div>
 
     <div class="hidden" id="account-signed-in">
-      <p class="account-identity">Signed in as <strong id="account-email"></strong></p>
+      <p class="account-identity">Signed in as <strong id="account-email"></strong><span class="badge hidden" id="supporter-badge">Supporter</span></p>
       <div class="account-actions">
         <button class="btn btn-quiet" type="button" id="sign-out">Sign out</button>
+        <button class="btn hidden" type="button" id="support">Support this game</button>
         <button class="btn btn-danger" type="button" id="delete-account">Delete account</button>
       </div>
+      <p class="muted hidden" id="support-state" role="status" aria-live="polite"></p>
     </div>
   </section>
 

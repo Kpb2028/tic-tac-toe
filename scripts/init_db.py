@@ -114,6 +114,23 @@ STATEMENTS = (
       ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES users (id) ON DELETE SET NULL
     """,
     "CREATE INDEX IF NOT EXISTS games_user_idx ON games (user_id) WHERE user_id IS NOT NULL",
+    # --- payments --------------------------------------------------------
+    # Keyed on Stripe's Checkout session id, which makes the webhook insert
+    # idempotent: Stripe retries and may deliver the same event twice.
+    # user_id is nulled rather than cascaded when an account goes away — a
+    # payment is a financial record that outlives the account it came from.
+    """
+    CREATE TABLE IF NOT EXISTS payments (
+      session_id     text        PRIMARY KEY,
+      user_id        uuid        REFERENCES users (id) ON DELETE SET NULL,
+      payment_intent text,
+      amount_minor   integer,
+      currency       text,
+      status         text        NOT NULL CHECK (status IN ('paid', 'refunded')),
+      created_at     timestamptz NOT NULL DEFAULT now()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS payments_user_idx ON payments (user_id) WHERE user_id IS NOT NULL",
     # Every table is reached only through the connection string used by the API.
     # Enabling RLS with no policy means that if Supabase's anon or authenticated
     # PostgREST roles are ever pointed at this project, they read and write
@@ -124,6 +141,7 @@ STATEMENTS = (
     "ALTER TABLE identities ENABLE ROW LEVEL SECURITY",
     "ALTER TABLE sessions ENABLE ROW LEVEL SECURITY",
     "ALTER TABLE auth_flow ENABLE ROW LEVEL SECURITY",
+    "ALTER TABLE payments ENABLE ROW LEVEL SECURITY",
 )
 
 
@@ -143,8 +161,8 @@ def main():
             cur.execute(statement)
 
     print(
-        "Schema ready: games, rate_limit, users, identities, sessions, auth_flow "
-        "(RLS enabled, no policies)"
+        "Schema ready: games, rate_limit, users, identities, sessions, auth_flow, "
+        "payments (RLS enabled, no policies)"
     )
     return 0
 

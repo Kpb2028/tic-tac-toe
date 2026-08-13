@@ -202,6 +202,20 @@ select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 .account-identity { margin: 0; }
 
+.badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--canvas);
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
 .btn-danger {
   background: var(--accent);
   color: var(--bg);

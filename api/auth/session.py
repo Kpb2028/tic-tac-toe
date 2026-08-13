@@ -17,6 +17,7 @@ from _auth import (  # noqa: E402
 )
 from _db import MissingDatabaseUrl, connect, is_missing_schema  # noqa: E402
 from _http import origin_allowed, send_json  # noqa: E402
+from _pay import configured as payments_configured, is_supporter  # noqa: E402
 
 
 class handler(BaseHTTPRequestHandler):
@@ -29,6 +30,7 @@ class handler(BaseHTTPRequestHandler):
         try:
             with connect() as conn, conn.cursor() as cur:
                 user = current_user(cur, self)
+                supporter = is_supporter(cur, user["id"]) if user else False
 
             if user is None:
                 send_json(self, 200, {"signedIn": False, "providers": providers})
@@ -42,6 +44,8 @@ class handler(BaseHTTPRequestHandler):
                     "email": user["email"],
                     "displayName": user["display_name"],
                     "providers": providers,
+                    "supporter": supporter,
+                    "paymentsEnabled": payments_configured(),
                 },
             )
 
