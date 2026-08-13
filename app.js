@@ -576,8 +576,12 @@
     const providers = Array.isArray(data.providers) ? data.providers : [];
     signedIn = Boolean(data.signedIn);
 
+    // Nothing to offer without a configured provider, so the invitation to sign
+    // in stays hidden rather than sitting above an empty row of buttons.
+    const canSignIn = !data.unavailable && providers.length > 0;
+
     el.accountSignedIn.classList.toggle('hidden', !signedIn);
-    el.accountSignedOut.classList.toggle('hidden', signedIn);
+    el.accountSignedOut.classList.toggle('hidden', signedIn || !canSignIn);
     el.scopeSwitch.classList.toggle('hidden', !signedIn);
 
     if (signedIn) {
@@ -590,9 +594,9 @@
     renderProviders(providers);
 
     if (data.unavailable) {
-      accountMessage('Sign-in storage is not configured yet.');
-    } else if (!providers.length) {
-      accountMessage('No sign-in provider is configured on this deployment.');
+      accountMessage('Sign-in is unavailable — the account storage is not set up yet.');
+    } else if (!canSignIn) {
+      accountMessage('Sign-in is not available on this deployment.');
     } else {
       el.accountState.classList.add('hidden');
     }
@@ -719,6 +723,7 @@
   });
 
   newGame();
-  reportSignInOutcome();
-  loadSession(); // loads stats once the signed-in state is known
+  // After loadSession, not before: renderAccount clears the status line, which
+  // would wipe the outcome message from a sign-in that had just failed.
+  loadSession().then(reportSignInOutcome); // loadSession also loads the stats
 })();
