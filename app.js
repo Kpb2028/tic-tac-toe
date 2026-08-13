@@ -35,6 +35,15 @@
     scoreX: document.getElementById('score-x'),
     scoreO: document.getElementById('score-o'),
     scoreDraw: document.getElementById('score-draw'),
+    analyticsState: document.getElementById('analytics-state'),
+    analyticsBody: document.getElementById('analytics-body'),
+    statTotal: document.getElementById('stat-total'),
+    statDraws: document.getElementById('stat-draws'),
+    statAvg: document.getElementById('stat-avg'),
+    outcomeBars: document.getElementById('outcome-bars'),
+    levelRows: document.getElementById('level-rows'),
+    heatmap: document.getElementById('heatmap'),
+    daily: document.getElementById('daily'),
   };
 
   const cells = Array.from(document.querySelectorAll('.cell'));
@@ -47,6 +56,7 @@
   let winLine = null;
   let thinking = false;
   let cpuTimer = 0;
+  let movesPlayed = []; // cell indexes in order, for the analytics payload
 
   // --- persistence -------------------------------------------------------
   // Everything read back from localStorage is untrusted: validate each field
@@ -204,6 +214,7 @@
     if (over || thinking || board[index]) return;
 
     board[index] = turn;
+    movesPlayed.push(index);
     const win = winnerOf(board);
 
     if (win) {
@@ -211,10 +222,12 @@
       winLine = win.line;
       settings.scores[win.mark] = clampScore(settings.scores[win.mark] + 1);
       save();
+      recordGame(win.mark);
     } else if (isFull(board)) {
       over = true;
       settings.scores.draw = clampScore(settings.scores.draw + 1);
       save();
+      recordGame('draw');
     } else {
       turn = other(turn);
     }
@@ -231,6 +244,7 @@
     over = false;
     winLine = null;
     thinking = false;
+    movesPlayed = [];
     render();
     if (versusCpu() && cpuMark() === 'X') scheduleCpu();
   }
@@ -277,6 +291,220 @@
     el.mark.value = settings.playerMark;
     el.fieldLevel.classList.toggle('hidden', !versusCpu());
     el.fieldMark.classList.toggle('hidden', !versusCpu());
+  }
+
+  // --- analytics ---------------------------------------------------------
+  // The API is same-origin, which is all connect-src 'self' permits. Every call
+  // is best-effort: on a static-only host /api does not exist, so a failure
+  // degrades this panel and leaves the game untouched.
+  //
+  // All DOM here is built with createElement/textContent rather than innerHTML,
+  // so server-supplied values can never be parsed as markup.
+
+  const OUTCOME_BARS = [
+    { key: 'xWins', label: 'X wins', fill: '' },
+    { key: 'oWins', label: 'O wins', fill: 'positive' },
+    { key: 'draws', label: 'Draws', fill: 'neutral' },
+  ];
+
+  let statsPending = false;
+
+  function analyticsMessage(text, isError) {
+    el.analyticsState.textContent = text;
+    el.analyticsState.classList.toggle('error', Boolean(isError));
+    el.analyticsState.classList.remove('hidden');
+    el.analyticsBody.classList.add('hidden');
+  }
+
+  function recordGame(outcome) {
+    const payload = {
+      mode: settings.mode,
+      outcome,
+      moves: movesPlayed.length,
+      firstMove: movesPlayed[0],
+    };
+    if (settings.mode === 'cpu') {
+      payload.level = settings.level;
+      payload.playerMark = settings.playerMark;
+    }
+
+    fetch('/api/games', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then((res) => {
+        if (res.ok) loadStats();
+      })
+      .catch(() => {
+        /* offline or no API — the local scoreboard already updated */
+      });
+  }
+
+  function loadStats() {
+    if (statsPending) return;
+    statsPending = true;
+
+    fetch('/api/stats', { headers: { Accept: 'application/json' } })
+      .then((res) => {
+        if (res.status === 503) {
+          analyticsMessage('Analytics storage is not configured yet.');
+          return null;
+        }
+        if (!res.ok) {
+          analyticsMessage('Analytics are unavailable.', true);
+          return null;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data) renderStats(data);
+      })
+      .catch(() => {
+        analyticsMessage('Analytics are unavailable on this host.', true);
+      })
+      .finally(() => {
+        statsPending = false;
+      });
+  }
+
+  function renderStats(data) {
+    if (!data || typeof data !== 'object') {
+      analyticsMessage('Analytics are unavailable.', true);
+      return;
+    }
+
+    const total = Number(data.total) || 0;
+
+    el.statTotal.textContent = String(total);
+    el.statDraws.textContent = String(Number(data.draws) || 0);
+    el.statAvg.textContent = total ? (Number(data.avgMoves) || 0).toFixed(1) : '—';
+
+    renderOutcomes(data, total);
+    renderLevels(Array.isArray(data.byLevel) ? data.byLevel : []);
+    renderHeatmap(data.firstMoves && typeof data.firstMoves === 'object' ? data.firstMoves : {});
+    renderDaily(Array.isArray(data.daily) ? data.daily : []);
+
+    if (!total) {
+      analyticsMessage('No games recorded yet — finish one to start the tally.');
+      return;
+    }
+
+    el.analyticsState.classList.add('hidden');
+    el.analyticsBody.classList.remove('hidden');
+  }
+
+  function barRow(label, value, share, fillClass) {
+    const li = document.createElement('li');
+    li.className = 'bar';
+
+    const name = document.createElement('span');
+    name.className = 'bar-label';
+    name.textContent = label;
+
+    const track = document.createElement('div');
+    track.className = 'bar-track';
+
+    const fill = document.createElement('div');
+    fill.className = fillClass ? `bar-fill ${fillClass}` : 'bar-fill';
+    fill.style.width = `${share}%`; // CSSOM write: allowed under style-src 'self'
+    track.appendChild(fill);
+
+    const count = document.createElement('span');
+    count.className = 'bar-value';
+    count.textContent = String(value);
+
+    li.append(name, track, count);
+    return li;
+  }
+
+  function renderOutcomes(data, total) {
+    el.outcomeBars.replaceChildren(
+      ...OUTCOME_BARS.map(({ key, label, fill }) => {
+        const value = Number(data[key]) || 0;
+        return barRow(label, value, total ? (value / total) * 100 : 0, fill);
+      }),
+    );
+  }
+
+  function renderLevels(rows) {
+    if (!rows.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 4;
+      td.textContent = 'No computer games yet';
+      tr.appendChild(td);
+      el.levelRows.replaceChildren(tr);
+      return;
+    }
+
+    el.levelRows.replaceChildren(
+      ...rows.map((row) => {
+        const tr = document.createElement('tr');
+
+        const level = document.createElement('th');
+        level.scope = 'row';
+        level.textContent = row.level === 'hard' ? 'unbeatable' : String(row.level);
+
+        const counts = [row.playerWins, row.cpuWins, row.draws].map((n) => {
+          const td = document.createElement('td');
+          td.textContent = String(Number(n) || 0);
+          return td;
+        });
+
+        tr.append(level, ...counts);
+        return tr;
+      }),
+    );
+  }
+
+  function renderHeatmap(map) {
+    const counts = [];
+    for (let i = 0; i < 9; i += 1) counts.push(Number(map[String(i)]) || 0);
+    const peak = Math.max(...counts, 1);
+
+    el.heatmap.replaceChildren(
+      ...counts.map((n, i) => {
+        const cell = document.createElement('div');
+        cell.className = 'heat-cell';
+        cell.textContent = String(n);
+
+        // Accent brown, floored well above zero so any non-empty square stays
+        // visible against the canvas colour.
+        if (n) {
+          const alpha = 0.12 + 0.68 * (n / peak);
+          cell.style.backgroundColor = `rgba(139, 69, 19, ${alpha.toFixed(3)})`;
+        }
+
+        const label = `Row ${Math.floor(i / 3) + 1}, column ${(i % 3) + 1}: ${n} opening${n === 1 ? '' : 's'}`;
+        cell.setAttribute('aria-label', label);
+        cell.title = label;
+        return cell;
+      }),
+    );
+  }
+
+  function renderDaily(rows) {
+    const peak = rows.reduce((max, row) => Math.max(max, Number(row.count) || 0), 0);
+
+    el.daily.replaceChildren(
+      ...rows.map((row) => {
+        const n = Number(row.count) || 0;
+
+        const li = document.createElement('li');
+        li.className = 'day';
+
+        const bar = document.createElement('div');
+        bar.className = 'day-bar';
+        bar.style.height = peak ? `${Math.max(3, (n / peak) * 100)}%` : '3px';
+
+        const label = `${String(row.day).slice(0, 10)}: ${n} game${n === 1 ? '' : 's'}`;
+        li.title = label;
+        li.setAttribute('aria-label', label);
+        li.appendChild(bar);
+        return li;
+      }),
+    );
   }
 
   // --- input -------------------------------------------------------------
@@ -336,4 +564,5 @@
   });
 
   newGame();
+  loadStats();
 })();

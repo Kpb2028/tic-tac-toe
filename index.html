@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- frame-ancestors is deliberately absent: it is ignored in a <meta> CSP and
      must be sent as a real header (see README) if this is ever hosted. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>Tic Tac Toe</title>
 <link rel="stylesheet" href="styles.css">
@@ -66,6 +66,39 @@
         <option value="O">O (second)</option>
       </select>
     </label>
+  </section>
+
+  <section class="panel analytics" aria-labelledby="analytics-heading">
+    <h2 id="analytics-heading">Game analytics</h2>
+    <p class="muted">Anonymous totals from everyone who plays this page. Results are self-reported by each browser.</p>
+
+    <p class="analytics-state" id="analytics-state" role="status" aria-live="polite">Loading…</p>
+
+    <div class="analytics-body hidden" id="analytics-body">
+      <div class="scores">
+        <div class="score"><span class="score-label">Games</span><span class="score-value" id="stat-total">0</span></div>
+        <div class="score"><span class="score-label">Draws</span><span class="score-value" id="stat-draws">0</span></div>
+        <div class="score"><span class="score-label">Avg moves</span><span class="score-value" id="stat-avg">0</span></div>
+      </div>
+
+      <h3>Outcomes</h3>
+      <ul class="bars" id="outcome-bars"></ul>
+
+      <h3>Versus computer</h3>
+      <table class="grid-table">
+        <caption class="visually-hidden">Win, loss and draw counts for each difficulty level</caption>
+        <thead>
+          <tr><th scope="col">Level</th><th scope="col">You</th><th scope="col">CPU</th><th scope="col">Draw</th></tr>
+        </thead>
+        <tbody id="level-rows"></tbody>
+      </table>
+
+      <h3>Opening square</h3>
+      <div class="heatmap" id="heatmap" role="group" aria-label="Opening move frequency by board square"></div>
+
+      <h3>Last 14 days</h3>
+      <ul class="daily" id="daily"></ul>
+    </div>
   </section>
 
   <noscript><p class="status">This game needs JavaScript. Serve the folder over HTTP — <code>file://</code> origins are blocked by the page's Content-Security-Policy.</p></noscript>

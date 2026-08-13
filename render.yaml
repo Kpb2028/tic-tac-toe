@@ -1,3 +1,6 @@
+# Render hosts this as a static site, which has no compute: the /api functions
+# do not run here, so the analytics panel reports itself unavailable and the
+# game plays normally. Analytics need the Vercel deploy.
 services:
   - type: web
     name: tic-tac-toe
@@ -10,7 +13,7 @@ services:
       # which browsers ignore unless it arrives as a real header.
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        value: "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
       - path: /*
         name: X-Content-Type-Options
         value: nosniff
